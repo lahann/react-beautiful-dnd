@@ -22,3 +22,8 @@ export type Dragging = {|
 export type QuoteMap = {
   [key: string]: Quote[]
 }
+
+export type Task = {|
+  id: string,
+  content: string,
+|}

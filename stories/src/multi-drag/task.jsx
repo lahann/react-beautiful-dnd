@@ -2,9 +2,9 @@
 import React, { Component } from 'react';
 import styled from 'styled-components';
 import { Draggable } from '../../../src/';
+import { grid, colors, borderRadius } from '../constants';
 import type { DraggableProvided, DraggableStateSnapshot } from '../../../src/';
 import type { Task as TaskType } from '../types';
-import { colors, grid, borderRadius } from '../constants';
 
 type Props = {|
   task: TaskType,
@@ -22,28 +22,19 @@ const Container = styled.div`
   ${({ isDragging }) => (isDragging ? 'box-shadow: 1px 1px 1px grey; background: lightblue' : '')}
 `;
 
-const Wrapper = styled.div``;
-
 export default class Task extends Component<Props> {
   render() {
     const task: TaskType = this.props.task;
     const index: number = this.props.index;
-
     return (
       <Draggable draggableId={task.id} index={index}>
         {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
-          <Wrapper>
-            <Container
-              innerRef={provided.innerRef}
-              isDragging={snapshot.isDragging}
-              {...provided.draggableProps}
-              {...provided.dragHandleProps}
-              aria-roledescription="Draggable task. Press space bar to lift"
-            >
-              {this.props.task.content}
+          <div>
+            <Container innerRef={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
+              {task.content}
             </Container>
             {provided.placeholder}
-          </Wrapper>
+          </div>
         )}
       </Draggable>
     );
