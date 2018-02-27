@@ -52,31 +52,6 @@ export default class Task extends Component<Props> {
     return { onClick };
   }
 
-  onClick = (props: DragHandleProps, event: MouseEvent) => {
-    if (props.dragHandleProps) {
-      props.dragHandleProps.onClick(event);
-    }
-
-    if (props) {
-      props.onClick(event);
-    }
-
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    const { isSelected, unselect, select, task } = this.props;
-
-    event.preventDefault();
-
-    if (isSelected) {
-      unselect(task);
-      return;
-    }
-
-    select(task);
-  }
-
   render() {
     const task: TaskType = this.props.task;
     const index: number = this.props.index;
@@ -84,11 +59,12 @@ export default class Task extends Component<Props> {
     return (
       <Draggable draggableId={task.id} index={index}>
         {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
-          <div onClick={() => this.onClick(provided.dragHandleProps, event)}>
+          <div>
             <Container
               innerRef={provided.innerRef}
               {...provided.draggableProps}
               {...provided.dragHandleProps}
+              {...this.getEventsWithSelection(provided.dragHandleProps)}
               isDragging={snapshot.isDragging}
               isSelected={isSelected}
             >
