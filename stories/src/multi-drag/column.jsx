@@ -10,6 +10,9 @@ import type { Task as TaskType } from '../types';
 
 type Props = {|
   column: ColumnType,
+  selected: TaskType[],
+  select: (task: TaskType) => void,
+  unselect: (task: TaskType) => void,
 |}
 
 const Container = styled.div`
@@ -33,6 +36,7 @@ const TaskList = styled.div`
 export default class Column extends Component<Props> {
   render() {
     const column: ColumnType = this.props.column;
+    const selected: TaskType[] = this.props.selected;
     return (
       <Container>
         <Title>{column.title}</Title>
@@ -44,7 +48,14 @@ export default class Column extends Component<Props> {
               {...provided.droppableProps}
             >
               {column.tasks.map((task: TaskType, index: number) => (
-                <Task task={task} index={index} key={task.id} />
+                <Task
+                  task={task}
+                  index={index}
+                  key={task.id}
+                  isSelected={Boolean(selected.indexOf(task) !== -1)}
+                  select={this.props.select}
+                  unselect={this.props.unselect}
+                />
               ))}
               {provided.placeholder}
             </TaskList>

@@ -231,6 +231,7 @@ export default ({
     // preventing click
 
     // only want to prevent the first click
+    console.log('preventing click!!');
     setState({
       preventClick: false,
     });
