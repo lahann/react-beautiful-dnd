@@ -13,6 +13,8 @@ type Props = {|
   selected: TaskType[],
   select: (task: TaskType) => void,
   unselect: (task: TaskType) => void,
+  addToSelection: (task: TaskType) => void,
+  removeFromSelection: (task: TaskType) => void,
 |}
 
 const Container = styled.div`
@@ -55,6 +57,8 @@ export default class Column extends Component<Props> {
                   isSelected={Boolean(selected.indexOf(task) !== -1)}
                   select={this.props.select}
                   unselect={this.props.unselect}
+                  addToSelection={this.props.addToSelection}
+                  removeFromSelection={this.props.removeFromSelection}
                 />
               ))}
               {provided.placeholder}

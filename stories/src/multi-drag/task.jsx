@@ -12,6 +12,8 @@ type Props = {|
   isSelected: boolean,
   select: (task: TaskType) => void,
   unselect: (task: TaskType) => void,
+  addToSelection: (task: TaskType) => void,
+  removeFromSelection: (task: TaskType) => void,
 |}
 
 const Container = styled.div`
@@ -26,20 +28,43 @@ const Container = styled.div`
   ${({ isDragging }) => (isDragging ? 'box-shadow: 1px 1px 1px grey; background: lightblue;' : '')}
 `;
 
+const keyCodes = {
+  enter: 13,
+  escape: 27,
+};
+
 export default class Task extends Component<Props> {
-  getEventsWithSelection = (provided: ?DragHandleProps): Object => {
+  getEventsWithSelection = (handleProps: ?DragHandleProps): Object => {
     const onClick = (event: MouseEvent) => {
-      if (provided) {
-        provided.onClick(event);
+      if (handleProps) {
+        handleProps.onClick(event);
       }
 
       if (event.defaultPrevented) {
         return;
       }
 
-      const { isSelected, unselect, select, task } = this.props;
+      const {
+        isSelected,
+        task,
+        addToSelection,
+        removeFromSelection,
+        unselect,
+        select,
+      } = this.props;
 
       event.preventDefault();
+
+      const wasMetaKeyUsed: boolean = event.metaKey;
+
+      if (wasMetaKeyUsed) {
+        if (isSelected) {
+          removeFromSelection(task);
+          return;
+        }
+        addToSelection(task);
+        return;
+      }
 
       if (isSelected) {
         unselect(task);
@@ -49,7 +74,45 @@ export default class Task extends Component<Props> {
       select(task);
     };
 
-    return { onClick };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (handleProps) {
+        handleProps.onKeyDown(event);
+      }
+
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.keyCode === keyCodes.enter) {
+        const {
+          isSelected,
+          task,
+          addToSelection,
+          removeFromSelection,
+        } = this.props;
+
+        if (isSelected) {
+          removeFromSelection(task);
+          return;
+        }
+        addToSelection(task);
+        return;
+      }
+
+      if (event.keyCode === keyCodes.escape) {
+        const {
+          isSelected,
+          task,
+          unselect,
+        } = this.props;
+
+        if (isSelected) {
+          unselect(task);
+        }
+      }
+    };
+
+    return { onClick, onKeyDown };
   }
 
   render() {

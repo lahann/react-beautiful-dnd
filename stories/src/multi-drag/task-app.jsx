@@ -25,6 +25,14 @@ export default class TaskApp extends Component<*, State> {
     selected: [],
   }
 
+  componentDidMount() {
+    window.addEventListener('click', this.onWindowClick);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('click', this.onWindowClick);
+  }
+
   onDragStart = (start: DragStart) => {
     const id: string = start.draggableId;
     const selected: ?Task = this.state.selected.find((task: Task): boolean => task.id === id);
@@ -57,12 +65,10 @@ export default class TaskApp extends Component<*, State> {
       throw new Error('unable to find columns');
     }
 
-    // nothing was selected
-    if (!this.state.selected.length) {
+    // nothing, or a single item selected
+    if (this.state.selected.length <= 1) {
       if (sourceColumn === destinationColumn) {
         // moving in same list
-        console.log('moving in same list');
-
         const tasks: Task[] = reorder(
           sourceColumn.tasks,
           source.index,
@@ -82,19 +88,69 @@ export default class TaskApp extends Component<*, State> {
         this.setState({
           columns: shallow,
         });
+        return;
       }
 
       // moving to a new column
+      const task: Task = sourceColumn.tasks[source.index];
+      const home: Task[] = [...sourceColumn.tasks];
+      // remove from the original column
+      home.splice(source.index, 1);
+
+      const foreign: Task[] = [...destinationColumn.tasks];
+      // add to the new column
+      foreign.splice(destination.index, 0, task);
+
+      const homeIndex: number = columns.indexOf(sourceColumn);
+      const foreignIndex: number = columns.indexOf(destinationColumn);
+
+      const newHome: ColumnType = {
+        id: sourceColumn.id,
+        title: sourceColumn.title,
+        tasks: home,
+      };
+      const newForeign: ColumnType = {
+        id: destinationColumn.id,
+        title: destinationColumn.title,
+        tasks: foreign,
+      };
+
+      const shallow: ColumnType[] = [...columns];
+      shallow[homeIndex] = newHome;
+      shallow[foreignIndex] = newForeign;
+
+      this.setState({
+        columns: shallow,
+      });
+      return;
     }
+
+    // Something was selected! We need to move the item from one
+    console.log('multiple selection!!!');
+    //
   }
 
-  selectTask = (task: Task) => {
+  onWindowClick = (event: MouseEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    this.unselectAll();
+  }
+
+  select = (task: Task) => {
+    this.setState({
+      selected: [task],
+    });
+  }
+
+  addToSelection = (task: Task) => {
     this.setState({
       selected: [...this.state.selected, task],
     });
   }
 
-  unselectTask = (task: Task) => {
+  removeFromSelection = (task: Task) => {
     const index: number = this.state.selected.indexOf(task);
 
     if (index === -1) {
@@ -108,39 +164,32 @@ export default class TaskApp extends Component<*, State> {
     });
   }
 
+  unselect = () => {
+    this.unselectAll();
+  };
+
   unselectAll = () => {
     this.setState({
       selected: [],
     });
   }
 
-  onWindowClick = (event: MouseEvent) => {
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    this.unselectAll();
-  }
-
-  componentDidMount() {
-    window.addEventListener('click', this.onWindowClick);
-  }
-
-  componentWillUnmount() {
-    window.removeEventListener('click', this.onWindowClick);
-  }
-
   render() {
     return (
-      <DragDropContext onDragEnd={this.onDragEnd}>
+      <DragDropContext
+        onDragStart={this.onDragStart}
+        onDragEnd={this.onDragEnd}
+      >
         <Container>
           {this.state.columns.map((column: ColumnType) => (
             <Column
               column={column}
               key={column.id}
-              select={this.selectTask}
-              unselect={this.unselectTask}
+              select={this.select}
+              unselect={this.unselect}
               selected={this.state.selected}
+              addToSelection={this.addToSelection}
+              removeFromSelection={this.removeFromSelection}
             />
           ))}
         </Container>
