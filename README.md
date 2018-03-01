@@ -34,8 +34,8 @@ We have created some basic examples on `codesandbox` for you to play with direct
 
 We have created upgrade instructions in our release notes to help you upgrade to the latest version!
 
-- [Upgrading from `4.x` to `5.x`](https://github.com/atlassian/react-beautiful-dnd/releases/tag/v5.0.0);
-- [Upgrading from `3.x` to `4.x`](https://github.com/atlassian/react-beautiful-dnd/releases/tag/v4.0.0);
+- [Upgrading from `4.x` to `5.x`](https://github.com/atlassian/react-beautiful-dnd/releases/tag/v5.0.0)
+- [Upgrading from `3.x` to `4.x`](https://github.com/atlassian/react-beautiful-dnd/releases/tag/v4.0.0)
 
 ## Core characteristics
 
@@ -161,6 +161,10 @@ It also works in multi list configurations with all input types
 When the center of a `Draggable` gets within a small distance from the edge of a container we start auto scrolling. As the user gets closer to the edge of the container we increase the speed of the auto scroll. This acceleration uses an easing function to exponentially increase the rate of acceleration the closer we move towards the edge. We reach a maximum rate of acceleration a small distance from the true edge of a container so that the user does not need to be extremely precise to obtain the maximum scroll speed. This logic applies for any edge that is scrollable.
 
 The distances required for auto scrolling are based on a percentage of the height or width of the container for vertical and horizontal scrolling respectively. By using percentages rather than raw pixel values we are able to have a great experience regardless of the size and shape of your containers.
+
+##### Mouse wheel and trackpads
+
+In addition to auto scrolling we also allow users to scroll the window or a `Droppable` manually using their *mouse wheel* or *trackpad* 👌
 
 ##### A note about big `Draggable`s
 
@@ -868,6 +872,8 @@ Unfortunately we are [unable to apply this optimisation for you](https://medium.
 
 `Draggable` components can be dragged around and dropped onto `Droppable`s. A `Draggable` must always be contained within a `Droppable`. It is **possible** to reorder a `Draggable` within its home `Droppable` or move to another `Droppable`. It is **possible** because a `Droppable` is free to control what it allows to be dropped on it.
 
+Every `Draggable` has a *drag handle*. A *drag handle* is the element that the user interacts with in order to drag a `Draggable`. A *drag handle* can be a the `Draggable` element itself, or a child of the `Draggable`.
+
 ```js
 import { Draggable } from 'react-beautiful-dnd';
 
@@ -959,7 +965,6 @@ export type DraggableProps = {|
 
 type DraggableStyle = DraggingStyle | NotDraggingStyle
 type DraggingStyle = {|
-  pointerEvents: 'none',
   position: 'fixed',
   width: number,
   height: number,
@@ -1091,13 +1096,15 @@ It is an assumption that `Draggable`s are *visible siblings* of one another. The
 type DragHandleProps = {|
   onMouseDown: (event: MouseEvent) => void,
   onKeyDown: (event: KeyboardEvent) => void,
-  onClick: (event: MouseEvent) => void,
+  onTouchStart: (event: TouchEvent) => void,
+  onTouchMove: (event: TouchEvent) => void,
+  'data-react-beautiful-dnd-drag-handle': string,
+  'aria-roledescription': string,
   tabIndex: number,
-  'aria-grabbed': boolean,
   draggable: boolean,
-  onDragStart: () => void,
-  onDrop: () => void,
-|};
+  onDragStart: () => boolean,
+  onDrop: () => boolean
+|}
 ```
 
 ##### `dragHandleProps` Example: standard
@@ -1137,28 +1144,25 @@ Controlling a whole draggable by just a part of it
 </Draggable>;
 ```
 
-##### `dragHandleProps` Monkey patching
+##### `dragHandleProps` monkey patching
 
 You can override some of the `dragHandleProps` props with your own behavior if you need to.
 
 ```js
-const myOnClick = event => console.log('clicked on', event.target);
+const myOnMouseDown = event => console.log('mouse down on', event.target);
 
 <Draggable draggableId="draggable-1" index={0}>
   {(provided, snapshot) => {
-    const onClick = (() => {
+    const onMouseDown = (() => {
       // dragHandleProps might be null
       if (!provided.dragHandleProps) {
-        return myOnClick;
+        return onMouseDown;
       }
 
-      // creating a new onClick function that calls my onClick
-      // event as well as the provided one.
-      return event => {
-        provided.dragHandleProps.onClick(event);
-        // You may want to check if event.defaultPrevented
-        // is true and optionally fire your handler
-        myOnClick(event);
+      // creating a new onMouseDown function that calls myOnMouseDown as well as the drag handle one.
+      return (event) => {
+        provided.dragHandleProps.onMouseDown(event);
+        myOnMouseDown(event);
       };
     })();
 
@@ -1168,7 +1172,7 @@ const myOnClick = event => console.log('clicked on', event.target);
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          onClick={onClick}
+          onMouseDown={onMouseDown}
         >
           Drag me!
         </div>
@@ -1234,6 +1238,10 @@ The `children` function is also provided with a small amount of state relating t
 </Draggable>;
 ```
 
+### Adding an `onClick` handler to a `Draggable` or a *drag handle*
+
+You are welcome to add your own `onClick` handler to a `Draggable` or a *drag handle* (which might be the same element). `onClick` events handlers will only be called if we do not block the click. We block click events from occurring when the user was dragging an item. See [#sloppy-clicks-and-click-blocking-](sloppy clicks and click blocking) for more information.
+
 ### Interactive child elements within a `Draggable`
 
 It is possible for your `Draggable` to contain interactive elements. By default we block dragging on these elements. By doing this we allow those elements to function in the usual way. Here is the list of interactive elements that we block dragging from by default:
@@ -1249,6 +1257,22 @@ It is possible for your `Draggable` to contain interactive elements. By default 
 - [`contenteditable`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contenteditable) (any elements that are `contenteditable` or are within a `contenteditable` container)
 
 You can opt out of this behavior by adding the `disableInteractiveElementBlocking` prop to a `Draggable`. However, it is questionable as to whether you should be doing so because it will render the interactive element unusable. If you need to *conditionally* block dragging from interactive elements you can add the `disableInteractiveElementBlocking` prop to opt out of the default blocking and monkey patch the `dragHandleProps (DragHandleProps)` event handlers to disable dragging as required.
+
+## `resetServerContext`
+
+The `resetServerContext` function should be used when server side rendering (SSR). It ensures context state does not persist across multiple renders on the server which would result in client/server markup mismatches after multiple requests are rendered on the server.
+
+Use it before calling the server side render method:
+
+```js
+import { resetServerContext } from 'react-beautiful-dnd';
+import { renderToString } from 'react-dom/server';
+
+...
+
+resetServerContext();
+renderToString(...);
+```
 
 ## Flow usage
 
@@ -1319,7 +1343,6 @@ export type DraggableProps = {|
 |}
 type DraggableStyle = DraggingStyle | NotDraggingStyle
 type DraggingStyle = {|
-  pointerEvents: 'none',
   position: 'fixed',
   width: number,
   height: number,
@@ -1336,14 +1359,15 @@ type NotDraggingStyle = {|
   transition: ?string,
   transition: null | 'none',
 |}
-type DragHandleProvided = {|
+
+type DragHandleProps = {|
   onMouseDown: (event: MouseEvent) => void,
   onKeyDown: (event: KeyboardEvent) => void,
-  onClick: (event: MouseEvent) => void,
   onTouchStart: (event: TouchEvent) => void,
   onTouchMove: (event: TouchEvent) => void,
-  tabIndex: number,
+  'data-react-beautiful-dnd-drag-handle': string,
   'aria-roledescription': string,
+  tabIndex: number,
   draggable: boolean,
   onDragStart: () => boolean,
   onDrop: () => boolean
