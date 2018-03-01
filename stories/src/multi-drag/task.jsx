@@ -34,86 +34,69 @@ const keyCodes = {
 };
 
 export default class Task extends Component<Props> {
-  getEventsWithSelection = (handleProps: ?DragHandleProps): Object => {
-    const onClick = (event: MouseEvent) => {
-      if (handleProps) {
-        handleProps.onClick(event);
-      }
-
-      if (event.defaultPrevented) {
-        return;
-      }
-
+  // Using onKeyUp so that we did not need to monkey patch onKeyDown
+  onKeyUp = (event: KeyboardEvent) => {
+    if (event.keyCode === keyCodes.enter) {
       const {
         isSelected,
         task,
         addToSelection,
         removeFromSelection,
-        unselect,
-        select,
       } = this.props;
 
-      event.preventDefault();
-
-      const wasMetaKeyUsed: boolean = event.metaKey;
-
-      if (wasMetaKeyUsed) {
-        if (isSelected) {
-          removeFromSelection(task);
-          return;
-        }
-        addToSelection(task);
+      if (isSelected) {
+        removeFromSelection(task);
         return;
       }
+      addToSelection(task);
+      return;
+    }
+
+    if (event.keyCode === keyCodes.escape) {
+      const {
+        isSelected,
+        task,
+        unselect,
+      } = this.props;
 
       if (isSelected) {
         unselect(task);
-        return;
       }
-
-      select(task);
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (handleProps) {
-        handleProps.onKeyDown(event);
-      }
-
-      if (event.defaultPrevented) {
-        return;
-      }
-
-      if (event.keyCode === keyCodes.enter) {
-        const {
-          isSelected,
-          task,
-          addToSelection,
-          removeFromSelection,
-        } = this.props;
-
-        if (isSelected) {
-          removeFromSelection(task);
-          return;
-        }
-        addToSelection(task);
-        return;
-      }
-
-      if (event.keyCode === keyCodes.escape) {
-        const {
-          isSelected,
-          task,
-          unselect,
-        } = this.props;
-
-        if (isSelected) {
-          unselect(task);
-        }
-      }
-    };
-
-    return { onClick, onKeyDown };
+    }
   }
+
+  // Using onClick as it will be correctly
+  // preventing if there was a drag
+  onClick = (event: MouseEvent) => {
+    const {
+      isSelected,
+      task,
+      addToSelection,
+      removeFromSelection,
+      unselect,
+      select,
+    } = this.props;
+
+    event.preventDefault();
+
+    const wasMetaKeyUsed: boolean = event.metaKey;
+
+    if (wasMetaKeyUsed) {
+      if (isSelected) {
+        removeFromSelection(task);
+        return;
+      }
+      addToSelection(task);
+      return;
+    }
+
+    if (isSelected) {
+      unselect(task);
+      return;
+    }
+
+    select(task);
+  };
 
   render() {
     const task: TaskType = this.props.task;
@@ -127,7 +110,8 @@ export default class Task extends Component<Props> {
               innerRef={provided.innerRef}
               {...provided.draggableProps}
               {...provided.dragHandleProps}
-              {...this.getEventsWithSelection(provided.dragHandleProps)}
+              onClick={this.onClick}
+              onKeyUp={this.onKeyUp}
               isDragging={snapshot.isDragging}
               isSelected={isSelected}
             >

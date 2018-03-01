@@ -27,6 +27,7 @@ export default class TaskApp extends Component<*, State> {
 
   componentDidMount() {
     window.addEventListener('click', this.onWindowClick);
+    // TODO: allow shift + arrow keys to increase selection
   }
 
   componentWillUnmount() {
@@ -122,12 +123,21 @@ export default class TaskApp extends Component<*, State> {
       this.setState({
         columns: shallow,
       });
-      return;
     }
 
-    // Something was selected! We need to move the item from one
-    console.log('multiple selection!!!');
-    //
+    // Multiple items where selected
+
+    // We need to move all of them to the new location.
+    // We are also going to place the item that was dragging first
+    // Otherwise we will preserve the order as much as possible.
+    // We put the dragging item on top as otherwise what the user was dragging
+    // could get lost in the dropped items
+
+    // 1. Remove all of the selected items from their current positions
+    // 2. Place all of the items in the new location
+
+    // Complication: items could have been selected from different lists.
+    // In which case - how should they be ordered?
   }
 
   onWindowClick = (event: MouseEvent) => {
