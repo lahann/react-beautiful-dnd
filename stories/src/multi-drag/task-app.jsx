@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { DragDropContext } from '../../../src/';
 import initial from './data';
 import Column from './column';
-import reorder from '../reorder';
+import reorder from './reorder';
 import type { DragStart, DropResult, DraggableLocation } from '../../../src/';
 import type { Task } from '../types';
 import type { Column as ColumnType } from './types';
@@ -54,17 +54,30 @@ export default class TaskApp extends Component<*, State> {
     }
 
     const columns: ColumnType[] = this.state.columns;
+    const selected: Task[] = this.state.selected;
 
-    const sourceColumn: ?ColumnType = columns.find(
-      (column: ColumnType): boolean => column.id === source.droppableId
-    );
-    const destinationColumn: ?ColumnType = columns.find(
-      (column: ColumnType): boolean => column.id === destination.droppableId
-    );
+    // const sourceColumn: ?ColumnType = columns.find(
+    //   (column: ColumnType): boolean => column.id === source.droppableId
+    // );
+    // const destinationColumn: ?ColumnType = columns.find(
+    //   (column: ColumnType): boolean => column.id === destination.droppableId
+    // );
 
-    if (!sourceColumn || !destinationColumn) {
-      throw new Error('unable to find columns');
-    }
+    // if (!sourceColumn || !destinationColumn) {
+    //   throw new Error('unable to find columns');
+    // }
+
+    const reordered: ColumnType[] = reorder({
+      columns,
+      selected,
+      source,
+      destination,
+    });
+
+    this.setState({
+      columns: reordered,
+    });
+
 
     // nothing, or a single item selected
     if (this.state.selected.length <= 1) {
@@ -138,6 +151,10 @@ export default class TaskApp extends Component<*, State> {
 
     // Complication: items could have been selected from different lists.
     // In which case - how should they be ordered?
+
+
+    // ## Phase 1: remove all selected items
+
   }
 
   onWindowClick = (event: MouseEvent) => {
