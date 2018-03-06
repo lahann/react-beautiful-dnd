@@ -17,14 +17,11 @@ export type Result = {|
   selected: Task[],
 |}
 
-const reorderMultiDrag = ({
-  columns,
-  selected,
-  source,
-  destination,
-}): Result => {
-
-};
+type Entry = {|
+  task: Task,
+  index: number,
+  selectionIndex: number,
+|}
 
 const getColumnById = (columns: Column[], id: string): Column => {
   const column: ?Column = columns.find((col: Column) => col.id === id);
@@ -32,6 +29,61 @@ const getColumnById = (columns: Column[], id: string): Column => {
     throw new Error('cannot find column');
   }
   return column;
+};
+
+const reorderMultiDrag = ({
+  columns,
+  selected,
+  source,
+  destination,
+}): Result => {
+  // 1. remove all of the selected tasks from their lists
+  // When ordering the collected tasks:
+  //  dragged item first
+  //  followed by the items with the lowest index
+  //  in the event of a tie, use the one that was selected first
+
+  const home: Column = getColumnById(columns, source.droppableId);
+  const foreign: Column = getColumnById(columns, destination.droppableId);
+  const dragged: Task = home.tasks[source.index];
+
+  const collection: Entry[] = selected.map((task: Task, selectionIndex: number): Entry => {
+    const column: ?Column = columns.find((col: Column) => col.tasks.includes(task));
+
+    if (!column) {
+      throw new Error('Could not find home for task');
+    }
+
+    const index: number = column.tasks.indexOf(task);
+
+    const entry: Entry = {
+      task,
+      index,
+      selectionIndex,
+    };
+
+    return entry;
+  });
+
+  collection.sort((a: Entry, b: Entry): number => {
+    // moving the dragged item to the top of the list
+    if (a === dragged) {
+      return -1;
+    }
+    if (b === dragged) {
+      return 1;
+    }
+
+    // sorting by the index
+    if (a.index !== b.index) {
+      return a.index - b.index;
+    }
+
+    // if the index is the same then we use the order in which it was selected
+    return a.selectionIndex - b.selectionIndex;
+  });
+
+  // okay, now we are going to remove the tasks from their original locations
 };
 
 const replaceColumn = (columns: Column[], newColumn: Column): Column[] => {
@@ -53,7 +105,6 @@ const reorderSingleDrag = ({
   source,
   destination,
 }): Result => {
-
   // moving in same list
   if (source.droppableId === destination.droppableId) {
     const column: Column = getColumnById(columns, source.droppableId);

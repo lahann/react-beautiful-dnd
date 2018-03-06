@@ -56,17 +56,6 @@ export default class TaskApp extends Component<*, State> {
     const columns: ColumnType[] = this.state.columns;
     const selected: Task[] = this.state.selected;
 
-    // const sourceColumn: ?ColumnType = columns.find(
-    //   (column: ColumnType): boolean => column.id === source.droppableId
-    // );
-    // const destinationColumn: ?ColumnType = columns.find(
-    //   (column: ColumnType): boolean => column.id === destination.droppableId
-    // );
-
-    // if (!sourceColumn || !destinationColumn) {
-    //   throw new Error('unable to find columns');
-    // }
-
     const processed: ReorderResult = reorder({
       columns,
       selected,
