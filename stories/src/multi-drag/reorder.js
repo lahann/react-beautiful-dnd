@@ -19,6 +19,7 @@ export type Result = {|
 
 type Entry = {|
   task: Task,
+  columnId: string,
   index: number,
   selectionIndex: number,
 |}
@@ -30,6 +31,12 @@ const getColumnById = (columns: Column[], id: string): Column => {
   }
   return column;
 };
+
+const withNewTasks = (column: Column, tasks: Task[]): Column => ({
+  id: column.id,
+  title: column.title,
+  tasks,
+});
 
 const reorderMultiDrag = ({
   columns,
@@ -43,9 +50,8 @@ const reorderMultiDrag = ({
   //  followed by the items with the lowest index
   //  in the event of a tie, use the one that was selected first
 
-  const home: Column = getColumnById(columns, source.droppableId);
-  const foreign: Column = getColumnById(columns, destination.droppableId);
-  const dragged: Task = home.tasks[source.index];
+  const start: Column = getColumnById(columns, source.droppableId);
+  const dragged: Task = start.tasks[source.index];
 
   const collection: Entry[] = selected.map((task: Task, selectionIndex: number): Entry => {
     const column: ?Column = columns.find((col: Column) => col.tasks.includes(task));
@@ -58,6 +64,7 @@ const reorderMultiDrag = ({
 
     const entry: Entry = {
       task,
+      columnId: column.id,
       index,
       selectionIndex,
     };
@@ -83,7 +90,77 @@ const reorderMultiDrag = ({
     return a.selectionIndex - b.selectionIndex;
   });
 
+  // all tasks will be removed. We need to know how many are before the
+  // destination index so we can account for this change when inserting
+  // the tasks in the destination list
+  const destinationOffset: number = collection.reduce((acc: number, entry: Entry): number => {
+    // task is not in the destination column so we do not need to account for it
+    if (entry.columnId !== destination.droppableId) {
+      return acc;
+    }
+
+    // task is after the destination point so we do not need to account for it
+    if (entry.index > destination.index) {
+      return acc;
+    }
+
+    return acc + 1;
+  }, 0);
+  const insertAtIndex: number = destination.index - destinationOffset;
+
   // okay, now we are going to remove the tasks from their original locations
+  type TaskMap = {
+    [columnId: string]: Task[]
+  }
+
+  const toRemove: TaskMap = collection.reduce((map: TaskMap, entry: Entry): TaskMap => {
+    if (!map[entry.columnId]) {
+      map[entry.columnId] = [];
+    }
+
+    map[entry.columnId].push(entry.task);
+    return map;
+  }, {});
+
+  const withRemovedTasks: Column[] = columns.map((column: Column): Column => {
+    // no tasks need to be removed from this column
+    if (!toRemove[column.id]) {
+      return column;
+    }
+
+    // remove task from column
+    const newTasks: Task[] = [...column.tasks];
+    newTasks.splice(source.index, 1);
+
+    return withNewTasks(column, newTasks);
+  });
+
+  // okay, at this point we have removed all of the selected tasks from all columns
+  // now we need to insert the selected tasks into the destination column
+  const final: Column = getColumnById(withRemovedTasks, destination.droppableId);
+  const finalIndex: number = columns.indexOf(final);
+  const collectedTasks: Task[] = collection.map((entry: Entry): Task => entry.task);
+
+  // insert all of the items in the final index
+  const newFinalTasks: Task[] = [...final.tasks];
+  newFinalTasks.splice(insertAtIndex, 0, ...collectedTasks);
+
+  const finalWithAddedTasks: Column = withNewTasks(final, newFinalTasks);
+
+  const updated: Column[] = [...withRemovedTasks];
+  updated[finalIndex] = finalWithAddedTasks;
+
+  // sorting the selected items based on their new destination index
+  const rebalanced: Task[] = selected.sort((a: Task, b: Task): number => {
+    const aIndex: number = finalWithAddedTasks.tasks.indexOf(a);
+    const bIndex: number = finalWithAddedTasks.tasks.indexOf(b);
+    return aIndex - bIndex;
+  });
+
+  return {
+    columns: updated,
+    selected: rebalanced,
+  };
 };
 
 const replaceColumn = (columns: Column[], newColumn: Column): Column[] => {
@@ -92,12 +169,6 @@ const replaceColumn = (columns: Column[], newColumn: Column): Column[] => {
   shallow[index] = newColumn;
   return shallow;
 };
-
-const withNewTasks = (column: Column, tasks: Task[]): Column => ({
-  id: column.id,
-  title: column.title,
-  tasks,
-});
 
 const reorderSingleDrag = ({
   columns,
