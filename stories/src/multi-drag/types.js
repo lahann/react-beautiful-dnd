@@ -1,12 +1,22 @@
 // @flow
-import type { Task } from '../types';
+import type { Id, Task } from '../types';
 
 export type Column = {|
-  id: string,
+  id: Id,
   title: string,
-  tasks: Task[],
+  taskIds: Id[],
 |};
 
 export type ColumnMap = {
-  [id: string]: Column,
-};
+  [columnId: Id]: Column,
+}
+
+export type TaskMap = {
+  [taskId: Id]: Task,
+}
+
+export type Entities = {|
+  columnOrder: Id[],
+  columns: ColumnMap,
+  tasks: TaskMap,
+|}

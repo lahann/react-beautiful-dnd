@@ -4,16 +4,17 @@ import styled from 'styled-components';
 import { Draggable } from '../../../src/';
 import { grid, colors, borderRadius } from '../constants';
 import type { DraggableProvided, DragHandleProps, DraggableStateSnapshot } from '../../../src/';
-import type { Task as TaskType } from '../types';
+import type { Id, Task as TaskType } from '../types';
 
 type Props = {|
   task: TaskType,
   index: number,
   isSelected: boolean,
-  select: (task: TaskType) => void,
-  unselect: (task: TaskType) => void,
-  addToSelection: (task: TaskType) => void,
-  removeFromSelection: (task: TaskType) => void,
+  selectionCount: number,
+  select: (taskId: Id) => void,
+  unselect: (taskId: Id) => void,
+  addToSelection: (taskId: Id) => void,
+  removeFromSelection: (taskId: Id) => void,
 |}
 
 const Container = styled.div`
@@ -26,6 +27,27 @@ const Container = styled.div`
   ${props => (props.isSelected ? 'color: red;' : '')}
 
   ${({ isDragging }) => (isDragging ? 'box-shadow: 1px 1px 1px grey; background: lightblue;' : '')}
+
+  /* needed for SelectionCount */
+  position: relative;
+`;
+
+const Content = styled.div`
+`;
+
+const size: number = 40;
+
+const SelectionCount = styled.div`
+  right: -${grid}px;
+  top: -${grid}px;
+  background: lightblue;
+  border-radius: 50%;
+  height: ${size}px;
+  width: ${size}px;
+  line-height: ${size}px;
+  position: absolute;
+  text-align: center;
+  font-size: 0.8rem;
 `;
 
 const keyCodes = {
@@ -35,7 +57,7 @@ const keyCodes = {
 
 export default class Task extends Component<Props> {
   // Using onKeyUp so that we did not need to monkey patch onKeyDown
-  onKeyUp = (event: KeyboardEvent) => {
+  onKeyUp = (event: KeyboardEvent, snapshot: DraggableStateSnapshot) => {
     if (event.keyCode === keyCodes.enter) {
       const {
         isSelected,
@@ -44,11 +66,15 @@ export default class Task extends Component<Props> {
         removeFromSelection,
       } = this.props;
 
-      if (isSelected) {
-        removeFromSelection(task);
+      if (snapshot.isDragging) {
         return;
       }
-      addToSelection(task);
+
+      if (isSelected) {
+        removeFromSelection(task.id);
+        return;
+      }
+      addToSelection(task.id);
       return;
     }
 
@@ -60,7 +86,7 @@ export default class Task extends Component<Props> {
       } = this.props;
 
       if (isSelected) {
-        unselect(task);
+        unselect(task.id);
       }
     }
   }
@@ -83,25 +109,26 @@ export default class Task extends Component<Props> {
 
     if (wasMetaKeyUsed) {
       if (isSelected) {
-        removeFromSelection(task);
+        removeFromSelection(task.id);
         return;
       }
-      addToSelection(task);
+      addToSelection(task.id);
       return;
     }
 
     if (isSelected) {
-      unselect(task);
+      unselect(task.id);
       return;
     }
 
-    select(task);
+    select(task.id);
   };
 
   render() {
     const task: TaskType = this.props.task;
     const index: number = this.props.index;
     const isSelected: boolean = this.props.isSelected;
+    const selectionCount: number = this.props.selectionCount;
     return (
       <Draggable draggableId={task.id} index={index}>
         {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
@@ -111,11 +138,14 @@ export default class Task extends Component<Props> {
               {...provided.draggableProps}
               {...provided.dragHandleProps}
               onClick={this.onClick}
-              onKeyUp={this.onKeyUp}
+              onKeyUp={(event: KeyboardEvent) => this.onKeyUp(event, snapshot)}
               isDragging={snapshot.isDragging}
               isSelected={isSelected}
             >
-              {task.content}
+              <Content>{task.content}</Content>
+              {snapshot.isDragging && selectionCount > 1 ?
+                <SelectionCount>{selectionCount}</SelectionCount> : null
+              }
             </Container>
             {provided.placeholder}
           </div>

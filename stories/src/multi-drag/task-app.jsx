@@ -6,8 +6,8 @@ import initial from './data';
 import Column from './column';
 import reorder, { type Result as ReorderResult } from './reorder';
 import type { DragStart, DropResult, DraggableLocation } from '../../../src/';
-import type { Task } from '../types';
-import type { Column as ColumnType } from './types';
+import type { Task, Id } from '../types';
+import type { Entities, Column as ColumnType } from './types';
 
 const Container = styled.div`
   display: flex;
@@ -15,14 +15,18 @@ const Container = styled.div`
 `;
 
 type State = {|
-  columns: ColumnType[],
-  selected: Task[],
+  entities: Entities,
+  selectedTaskIds: Id[],
 |}
 
+const getTasks = (entities: Entities, columnId: Id): Task[] =>
+  entities.columns[columnId].taskIds.map(
+    (taskId: Id): Task => entities.tasks[taskId]
+  );
 export default class TaskApp extends Component<*, State> {
   state: State = {
-    columns: initial,
-    selected: [],
+    entities: initial,
+    selectedTaskIds: [],
   }
 
   componentDidMount() {
@@ -36,7 +40,7 @@ export default class TaskApp extends Component<*, State> {
 
   onDragStart = (start: DragStart) => {
     const id: string = start.draggableId;
-    const selected: ?Task = this.state.selected.find((task: Task): boolean => task.id === id);
+    const selected: ?Id = this.state.selectedTaskIds.find((taskId: Id): boolean => taskId === id);
 
     // if dragging an item that is not selected - unselect all items
     if (!selected) {
@@ -53,20 +57,14 @@ export default class TaskApp extends Component<*, State> {
       return;
     }
 
-    const columns: ColumnType[] = this.state.columns;
-    const selected: Task[] = this.state.selected;
-
     const processed: ReorderResult = reorder({
-      columns,
-      selected,
+      entities: this.state.entities,
+      selectedTaskIds: this.state.selectedTaskIds,
       source,
       destination,
     });
 
-    this.setState({
-      columns: processed.columns,
-      selected: processed.selected,
-    });
+    this.setState(processed);
   }
 
   onWindowClick = (event: MouseEvent) => {
@@ -77,29 +75,29 @@ export default class TaskApp extends Component<*, State> {
     this.unselectAll();
   }
 
-  select = (task: Task) => {
+  select = (taskId: Id) => {
     this.setState({
-      selected: [task],
+      selectedTaskIds: [taskId],
     });
   }
 
-  addToSelection = (task: Task) => {
+  addToSelection = (taskId: Id) => {
     this.setState({
-      selected: [...this.state.selected, task],
+      selectedTaskIds: [...this.state.selectedTaskIds, taskId],
     });
   }
 
-  removeFromSelection = (task: Task) => {
-    const index: number = this.state.selected.indexOf(task);
+  removeFromSelection = (taskId: Id) => {
+    const index: number = this.state.selectedTaskIds.indexOf(taskId);
 
     if (index === -1) {
       throw new Error('Cannot find task in selected list');
     }
 
-    const shallow: Task[] = [...this.state.selected];
+    const shallow: Id[] = [...this.state.selectedTaskIds];
     shallow.splice(index, 1);
     this.setState({
-      selected: shallow,
+      selectedTaskIds: shallow,
     });
   }
 
@@ -109,24 +107,27 @@ export default class TaskApp extends Component<*, State> {
 
   unselectAll = () => {
     this.setState({
-      selected: [],
+      selectedTaskIds: [],
     });
   }
 
   render() {
+    const entities: Entities = this.state.entities;
+    const selected: Id[] = this.state.selectedTaskIds;
     return (
       <DragDropContext
         onDragStart={this.onDragStart}
         onDragEnd={this.onDragEnd}
       >
         <Container>
-          {this.state.columns.map((column: ColumnType) => (
+          {entities.columnOrder.map((columnId: Id) => (
             <Column
-              column={column}
-              key={column.id}
+              column={entities.columns[columnId]}
+              tasks={getTasks(entities, columnId)}
+              selectedTaskIds={selected}
+              key={columnId}
               select={this.select}
               unselect={this.unselect}
-              selected={this.state.selected}
               addToSelection={this.addToSelection}
               removeFromSelection={this.removeFromSelection}
             />

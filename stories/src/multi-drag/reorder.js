@@ -1,78 +1,147 @@
 // @flow
-import type { Column, ColumnMap } from './types';
-import type { Task } from '../types';
+import type { Column, ColumnMap, Entities } from './types';
+import type { Task, Id } from '../types';
 import type { DraggableLocation } from '../../../src/types';
 import reorder from '../reorder';
 
 type Args = {|
-  columns: Column[],
-  selected: Task[],
+  entities: Entities,
+  selectedTaskIds: Id[],
   source: DraggableLocation,
   destination: DraggableLocation,
 |}
 
 export type Result = {|
-  columns: Column[],
+  entities: Entities,
   // a drop operations can change the order of the selected task array
-  selected: Task[],
+  selectedTaskIds: Id[],
 |}
 
-type Entry = {|
-  task: Task,
-  columnId: string,
-  index: number,
-  selectionIndex: number,
-|}
-
-const getColumnById = (columns: Column[], id: string): Column => {
-  const column: ?Column = columns.find((col: Column) => col.id === id);
-  if (!column) {
-    throw new Error('cannot find column');
-  }
-  return column;
-};
-
-const withNewTasks = (column: Column, tasks: Task[]): Column => ({
+const withNewTaskIds = (column: Column, taskIds: Id[]): Column => ({
   id: column.id,
   title: column.title,
-  tasks,
+  taskIds,
 });
 
-const reorderMultiDrag = ({
-  columns,
-  selected,
+const reorderSingleDrag = ({
+  entities,
+  selectedTaskIds,
   source,
   destination,
-}): Result => {
-  // 1. remove all of the selected tasks from their lists
-  // When ordering the collected tasks:
-  //  dragged item first
-  //  followed by the items with the lowest index
-  //  in the event of a tie, use the one that was selected first
+}: Args): Result => {
+  // moving in the same list
+  if (source.droppableId === destination.droppableId) {
+    const column: Column = entities.columns[source.droppableId];
+    const reordered: Id[] = reorder(
+      column.taskIds,
+      source.index,
+      destination.index,
+    );
 
-  const start: Column = getColumnById(columns, source.droppableId);
-  const dragged: Task = start.tasks[source.index];
-
-  const collection: Entry[] = selected.map((task: Task, selectionIndex: number): Entry => {
-    const column: ?Column = columns.find((col: Column) => col.tasks.includes(task));
-
-    if (!column) {
-      throw new Error('Could not find home for task');
-    }
-
-    const index: number = column.tasks.indexOf(task);
-
-    const entry: Entry = {
-      task,
-      columnId: column.id,
-      index,
-      selectionIndex,
+    // $ExpectError - using spread
+    const updated: Entities = {
+      ...entities,
+      columns: {
+        ...entities.columns,
+        [column.id]: withNewTaskIds(column, reordered),
+      },
     };
 
-    return entry;
+    return {
+      entities: updated,
+      selectedTaskIds,
+    };
+  }
+
+  // moving to a new list
+  const home: Column = entities.columns[source.droppableId];
+  const foreign: Column = entities.columns[destination.droppableId];
+
+  // the id of the task to be moved
+  const taskId: Id = home.taskIds[source.index];
+
+  // remove from home column
+  const newHomeTaskIds: Id[] = [...home.taskIds];
+  newHomeTaskIds.splice(source.index, 1);
+
+  // add to foreign column
+  const newForeignTaskIds: Id[] = [...foreign.taskIds];
+  newForeignTaskIds.splice(destination.index, 0, taskId);
+
+  // $ExpectError - using spread
+  const updated: Entities = {
+    ...entities,
+    columns: {
+      ...entities.columns,
+      [home.id]: withNewTaskIds(home, newHomeTaskIds),
+      [foreign.id]: withNewTaskIds(foreign, newForeignTaskIds),
+    },
+  };
+
+  return {
+    entities: updated,
+    selectedTaskIds,
+  };
+};
+
+type TaskId = Id;
+
+const getHomeColumn = (entities: Entities, taskId: TaskId): Column => {
+  const columnId: ?Id = entities.columnOrder.find((id: Id) => {
+    const column: Column = entities.columns[id];
+    return column.taskIds.includes(taskId);
   });
 
-  collection.sort((a: Entry, b: Entry): number => {
+  if (!columnId) {
+    console.error('Count not find column for task', taskId, entities);
+    throw new Error('boom');
+  }
+
+  return entities.columns[columnId];
+};
+
+const reorderMultiDrag = ({
+  entities,
+  selectedTaskIds,
+  source,
+  destination,
+}: Args): Result => {
+  const start: Column = entities.columns[source.droppableId];
+  const dragged: TaskId = start.taskIds[source.index];
+
+  const insertAtIndex: number = (() => {
+    const destinationIndexOffset: number = selectedTaskIds.reduce(
+      (previous: number, current: TaskId): number => {
+        if (current === dragged) {
+          return previous;
+        }
+
+        const final: Column = entities.columns[destination.droppableId];
+        const column: Column = getHomeColumn(entities, current);
+
+        if (column !== final) {
+          return previous;
+        }
+
+        const index: number = column.taskIds.indexOf(current);
+
+        if (index >= destination.index) {
+          return previous;
+        }
+
+        // the selected item is before the destination index
+        // we need to account for this when inserting into the new location
+        return previous + 1;
+      }, 0);
+
+    const result: number = destination.index - destinationIndexOffset;
+    return result;
+  })();
+
+  // doing the ordering now as we are required to look up columns
+  // and know original ordering
+  const orderedSelectedTaskIds: TaskId[] = [...selectedTaskIds];
+  orderedSelectedTaskIds.sort((a: TaskId, b: TaskId): number => {
     // moving the dragged item to the top of the list
     if (a === dragged) {
       return -1;
@@ -81,151 +150,61 @@ const reorderMultiDrag = ({
       return 1;
     }
 
-    // sorting by the index
-    if (a.index !== b.index) {
-      return a.index - b.index;
+    // sorting by their natural indexes
+    const columnForA: Column = getHomeColumn(entities, a);
+    const indexOfA: number = columnForA.taskIds.indexOf(a);
+    const columnForB: Column = getHomeColumn(entities, b);
+    const indexOfB: number = columnForB.taskIds.indexOf(b);
+
+    if (indexOfA !== indexOfB) {
+      return indexOfA - indexOfB;
     }
 
-    // if the index is the same then we use the order in which it was selected
-    return a.selectionIndex - b.selectionIndex;
+    // sorting by their order in the selectedTaskIds list
+    return -1;
   });
 
-  // all tasks will be removed. We need to know how many are before the
-  // destination index so we can account for this change when inserting
-  // the tasks in the destination list
-  const destinationOffset: number = collection.reduce((acc: number, entry: Entry): number => {
-    // task is not in the destination column so we do not need to account for it
-    if (entry.columnId !== destination.droppableId) {
-      return acc;
-    }
+  // we need to remove all of the selected tasks from their columns
+  const withRemovedTasks: ColumnMap = entities.columnOrder.reduce(
+    (previous: ColumnMap, columnId: Id): ColumnMap => {
+      const column: Column = entities.columns[columnId];
 
-    // task is after the destination point so we do not need to account for it
-    if (entry.index > destination.index) {
-      return acc;
-    }
+      // remove the id's of the items that are selected
+      const remainingTaskIds: TaskId[] = column.taskIds.filter(
+        (id: TaskId): boolean => !selectedTaskIds.includes(id)
+      );
 
-    return acc + 1;
-  }, 0);
-  const insertAtIndex: number = destination.index - destinationOffset;
+      previous[column.id] = withNewTaskIds(column, remainingTaskIds);
+      return previous;
+    }, entities.columns);
 
-  // okay, now we are going to remove the tasks from their original locations
-  type TaskMap = {
-    [columnId: string]: Task[]
-  }
+  const final: Column = withRemovedTasks[destination.droppableId];
+  const withInserted: TaskId[] = (() => {
+    const base: TaskId[] = [...final.taskIds];
+    base.splice(insertAtIndex, 0, ...orderedSelectedTaskIds);
+    return base;
+  })();
 
-  const toRemove: TaskMap = collection.reduce((map: TaskMap, entry: Entry): TaskMap => {
-    if (!map[entry.columnId]) {
-      map[entry.columnId] = [];
-    }
+  // insert all selected tasks into final column
+  const withAddedTasks: ColumnMap = {
+    ...withRemovedTasks,
+    [final.id]: withNewTaskIds(final, withInserted),
+  };
 
-    map[entry.columnId].push(entry.task);
-    return map;
-  }, {});
-
-  const withRemovedTasks: Column[] = columns.map((column: Column): Column => {
-    // no tasks need to be removed from this column
-    if (!toRemove[column.id]) {
-      return column;
-    }
-
-    // remove task from column
-    const newTasks: Task[] = [...column.tasks];
-    newTasks.splice(source.index, 1);
-
-    return withNewTasks(column, newTasks);
-  });
-
-  // okay, at this point we have removed all of the selected tasks from all columns
-  // now we need to insert the selected tasks into the destination column
-  const final: Column = getColumnById(withRemovedTasks, destination.droppableId);
-  const finalIndex: number = columns.indexOf(final);
-  const collectedTasks: Task[] = collection.map((entry: Entry): Task => entry.task);
-
-  // insert all of the items in the final index
-  const newFinalTasks: Task[] = [...final.tasks];
-  newFinalTasks.splice(insertAtIndex, 0, ...collectedTasks);
-
-  const finalWithAddedTasks: Column = withNewTasks(final, newFinalTasks);
-
-  const updated: Column[] = [...withRemovedTasks];
-  updated[finalIndex] = finalWithAddedTasks;
-
-  // sorting the selected items based on their new destination index
-  const rebalanced: Task[] = selected.sort((a: Task, b: Task): number => {
-    const aIndex: number = finalWithAddedTasks.tasks.indexOf(a);
-    const bIndex: number = finalWithAddedTasks.tasks.indexOf(b);
-    return aIndex - bIndex;
-  });
+  // $ExpectError - using spread
+  const updated: Entities = {
+    ...entities,
+    columns: withAddedTasks,
+  };
 
   return {
-    columns: updated,
-    selected: rebalanced,
+    entities: updated,
+    selectedTaskIds: orderedSelectedTaskIds,
   };
-};
-
-const replaceColumn = (columns: Column[], newColumn: Column): Column[] => {
-  const index: number = columns.findIndex((col: Column) => col.id === newColumn.id);
-  const shallow: Column[] = [...columns];
-  shallow[index] = newColumn;
-  return shallow;
-};
-
-const reorderSingleDrag = ({
-  columns,
-  selected,
-  source,
-  destination,
-}): Result => {
-  // moving in same list
-  if (source.droppableId === destination.droppableId) {
-    const column: Column = getColumnById(columns, source.droppableId);
-    const reordered: Task[] = reorder(
-      column.tasks,
-      source.index,
-      destination.index,
-    );
-    const withReorderedTasks: Column = withNewTasks(column, reordered);
-    const updated: Column[] = replaceColumn(columns, withReorderedTasks);
-
-    const result: Result = {
-      columns: updated,
-      // not updating the selected items
-      selected,
-    };
-
-    return result;
-  }
-
-  const home: Column = getColumnById(columns, source.droppableId);
-  const foreign: Column = getColumnById(columns, destination.droppableId);
-  const homeIndex: number = columns.indexOf(home);
-  const foreignIndex: number = columns.indexOf(foreign);
-
-  // the single task to be moved
-  const task: Task = home.tasks[source.index];
-
-  // remove from home column
-  const newHomeTasks: Task[] = [...home.tasks];
-  newHomeTasks.splice(source.index, 1);
-
-  // add to foreign column
-  const newForeignTasks: Task[] = [...foreign.tasks];
-  newForeignTasks.splice(destination.index, 0, task);
-
-  const shallow: Column[] = [...columns];
-  shallow[homeIndex] = withNewTasks(home, newHomeTasks);
-  shallow[foreignIndex] = withNewTasks(foreign, newForeignTasks);
-
-  const result: Result = {
-    columns: shallow,
-    selected,
-  };
-
-  return result;
 };
 
 export default (args: Args): Result => {
-  if (args.selected.length > 1) {
+  if (args.selectedTaskIds.length > 1) {
     return reorderMultiDrag(args);
   }
   return reorderSingleDrag(args);

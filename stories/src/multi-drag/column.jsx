@@ -1,20 +1,22 @@
 // @flow
 import React, { Component } from 'react';
 import styled from 'styled-components';
+import memoizeOne from 'memoize-one';
 import { Droppable } from '../../../src/';
 import { grid, colors, borderRadius } from '../constants';
 import Task from './task';
 import type { DroppableProvided, DroppableStateSnapshot } from '../../../src/';
 import type { Column as ColumnType } from './types';
-import type { Task as TaskType } from '../types';
+import type { Task as TaskType, Id } from '../types';
 
 type Props = {|
   column: ColumnType,
-  selected: TaskType[],
-  select: (task: TaskType) => void,
-  unselect: (task: TaskType) => void,
-  addToSelection: (task: TaskType) => void,
-  removeFromSelection: (task: TaskType) => void,
+  tasks: TaskType[],
+  selectedTaskIds: Id[],
+  select: (taskId: Id) => void,
+  unselect: (taskId: Id) => void,
+  addToSelection: (taskId: Id) => void,
+  removeFromSelection: (taskId: Id) => void,
 |}
 
 const Container = styled.div`
@@ -22,6 +24,10 @@ const Container = styled.div`
   margin: ${grid}px;
   background-color: ${colors.grey};
   border-radius: ${borderRadius}px;
+
+  /* we want the column to take up its full height */
+  display: flex;
+  flex-direction: column;
 `;
 
 const Title = styled.h3`
@@ -32,13 +38,25 @@ const Title = styled.h3`
 const TaskList = styled.div`
   padding: ${grid}px;
   min-height: 200px;
+  flex-grow: 1;
   ${props => (props.isDraggingOver ? `background-color: ${colors.green}` : '')};
 `;
+
+type TaskIdMap = {
+  [taskId: Id]: true,
+}
+
+const getSelectedMap = memoizeOne((selectedTaskIds: Id[]) =>
+  selectedTaskIds.reduce((previous: TaskIdMap, current: Id): TaskIdMap => {
+    previous[current] = true;
+    return previous;
+  }, {}));
 
 export default class Column extends Component<Props> {
   render() {
     const column: ColumnType = this.props.column;
-    const selected: TaskType[] = this.props.selected;
+    const tasks: TaskType[] = this.props.tasks;
+    const selectedTaskIds: Id[] = this.props.selectedTaskIds;
     return (
       <Container>
         <Title>{column.title}</Title>
@@ -49,14 +67,15 @@ export default class Column extends Component<Props> {
               isDraggingOver={snapshot.isDraggingOver}
               {...provided.droppableProps}
             >
-              {column.tasks.map((task: TaskType, index: number) => (
+              {tasks.map((task: TaskType, index: number) => (
                 <Task
                   task={task}
                   index={index}
                   key={task.id}
-                  isSelected={Boolean(selected.indexOf(task) !== -1)}
                   select={this.props.select}
                   unselect={this.props.unselect}
+                  isSelected={Boolean(getSelectedMap(selectedTaskIds)[task.id])}
+                  selectionCount={selectedTaskIds.length}
                   addToSelection={this.props.addToSelection}
                   removeFromSelection={this.props.removeFromSelection}
                 />
