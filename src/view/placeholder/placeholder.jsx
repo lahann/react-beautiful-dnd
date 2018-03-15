@@ -25,7 +25,7 @@ export default class Placeholder extends PureComponent<Props> {
       boxSizing: 'border-box',
     };
     return (
-      <div style={style} />
+      <tr style={style} />
     );
   }
 }
